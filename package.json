@@ -54,7 +54,8 @@
     "@sprucelabs/spruce-skill-utils": "^31.0.615",
     "@sprucelabs/spruce-store-plugin": "^62.4.3",
     "@sprucelabs/spruce-view-plugin": "^47.1.3",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "openai": "^4.76.3"
   },
   "devDependencies": {
     "@sprucelabs/jest-json-reporter": "^8.0.538",
