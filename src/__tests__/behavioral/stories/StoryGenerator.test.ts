@@ -4,8 +4,12 @@ import { fake, seed } from '@sprucelabs/spruce-test-fixtures'
 import { test, assert, errorAssert, generateId } from '@sprucelabs/test-utils'
 import Openai, { ClientOptions } from 'openai'
 import { ChatCompletion, ChatModel } from 'openai/resources'
-import { ChatCompletionCreateParamsBase } from 'openai/resources/chat/completions'
-import { PublicFamilyMember } from '../../../eightbitstories.types'
+import {
+    ChatCompletionCreateParamsBase,
+    ChatCompletionMessageParam,
+} from 'openai/resources/chat/completions'
+import { Family, PublicFamilyMember } from '../../../eightbitstories.types'
+import FamiliesStore from '../../../family/Families.store'
 import FamilyMembersStore from '../../../members/FamilyMembers.store'
 import AbstractEightBitTest from '../../support/AbstractEightBitTest'
 
@@ -13,6 +17,7 @@ import AbstractEightBitTest from '../../support/AbstractEightBitTest'
 export default class StoryGeneratorTest extends AbstractEightBitTest {
     private static generator: StoryGenerator
     private static members: PublicFamilyMember[]
+    private static family: Family
     private static apiKey: string
 
     protected static async beforeAll(): Promise<void> {
@@ -25,6 +30,7 @@ export default class StoryGeneratorTest extends AbstractEightBitTest {
     }
 
     @seed('familyMembers', 3)
+    @seed('families', 1)
     protected static async beforeEach() {
         await super.beforeEach()
 
@@ -35,6 +41,8 @@ export default class StoryGeneratorTest extends AbstractEightBitTest {
             stores: this.stores,
             openaiApiKey: this.apiKey,
         })
+
+        this.family = await this.getFirstFamily()
         this.members = await this.familyMembers.find({})
     }
 
@@ -54,7 +62,7 @@ export default class StoryGeneratorTest extends AbstractEightBitTest {
         //@ts-ignore
         const err = await assert.doesThrowAsync(() => this.generateStory())
         errorAssert.assertError(err, 'MISSING_PARAMETERS', {
-            parameters: ['storyElements', 'familyMemberIds'],
+            parameters: ['storyElements', 'familyMemberIds', 'familyId'],
         })
     }
 
@@ -70,13 +78,25 @@ export default class StoryGeneratorTest extends AbstractEightBitTest {
     }
 
     @test()
-    protected static async generateStorysIfNoFamilyMemberSelected() {
+    protected static async generateStoryThrowsIfNoFamilyMemberSelected() {
         await this.assertGenerateThrowsInvalidParams(
             {
                 familyMemberIds: [],
                 storyElements: [generateId()],
             },
             ['familyMemberIds']
+        )
+    }
+
+    @test()
+    protected static async throwsIfPassedBadFamilyId() {
+        await this.assertGenerateThrowsInvalidParams(
+            {
+                familyId: generateId(),
+                familyMemberIds: [generateId()],
+                storyElements: [generateId()],
+            },
+            ['familyId']
         )
     }
 
@@ -132,14 +152,57 @@ export default class StoryGeneratorTest extends AbstractEightBitTest {
         })
     }
 
+    @test()
+    protected static async generatesExpectedSecondMessage() {
+        const members = this.generateFamilyMembersPartOfPrompt()
+
+        const storyElements = [generateId()]
+        const elements = storyElements.join(', ')
+
+        const expected = `Family Name:
+${this.family.name}
+
+Family Values:
+${this.family.values}
+
+Family Members:
+${members}
+
+Here are the story elements the family wants worked into the story for tonight:
+
+${elements}`
+
+        await this.generateStoryWithAllMembers({ storyElements })
+
+        this.openAi.assertSecondCompletionMessageEquals({
+            role: 'system',
+            content: expected,
+        })
+
+        this.log(expected)
+    }
+
+    private static generateFamilyMembersPartOfPrompt() {
+        return this.members
+            .map(
+                (m) => `Name: ${m.name}
+Bio: ${m.bio}`
+            )
+            .join('\n\n')
+    }
+
     private static get openAi(): MockOpenAi {
         return MockOpenAi.instance
     }
 
-    private static async generateStoryWithAllMembers() {
+    private static async generateStoryWithAllMembers(
+        options?: Partial<GenerateStoryOptions>
+    ) {
         await this.generateStory({
             familyMemberIds: this.members.map((m) => m.id),
             storyElements: [generateId()],
+            familyId: this.family.id,
+            ...options,
         })
     }
 
@@ -148,11 +211,16 @@ export default class StoryGeneratorTest extends AbstractEightBitTest {
     }
 
     private static async assertGenerateThrowsInvalidParams(
-        options: GenerateStoryOptions,
+        options: Partial<GenerateStoryOptions>,
         parameters: string[]
     ) {
         const err = await assert.doesThrowAsync(() =>
-            this.generateStory(options)
+            this.generateStory({
+                storyElements: [],
+                familyMemberIds: [],
+                familyId: this.family.id,
+                ...options,
+            })
         )
         errorAssert.assertError(err, 'INVALID_PARAMETERS', {
             parameters,
@@ -168,13 +236,16 @@ class StoryGenerator {
     public static Openai = Openai
     private familyMembers: FamilyMembersStore
     private openai: Openai
+    private families: FamiliesStore
 
     private constructor(options: {
         familyMembers: FamilyMembersStore
         openaiApiKey: string
+        families: FamiliesStore
     }) {
-        const { familyMembers, openaiApiKey } = options
+        const { familyMembers, openaiApiKey, families } = options
         this.familyMembers = familyMembers
+        this.families = families
         this.openai = new StoryGenerator.Openai({
             apiKey: openaiApiKey,
         })
@@ -186,14 +257,16 @@ class StoryGenerator {
             'openaiApiKey',
         ])
         const familyMembers = await stores.getStore('familyMembers')
-        return new this({ familyMembers, openaiApiKey })
+        const families = await stores.getStore('families')
+
+        return new this({ familyMembers, openaiApiKey, families })
     }
 
     public async generateStory(options: GenerateStoryOptions) {
-        const { storyElements, familyMemberIds } = assertOptions(options, [
-            'storyElements',
-            'familyMemberIds',
-        ])
+        const { storyElements, familyMemberIds, familyId } = assertOptions(
+            options,
+            ['storyElements', 'familyMemberIds', 'familyId']
+        )
 
         if (storyElements.length === 0) {
             throw new SchemaError({
@@ -202,9 +275,26 @@ class StoryGenerator {
             })
         }
 
-        if (familyMemberIds.length === 0) {
-            this.throwInvalidFamilyMemberIds()
+        const family = await this.families.findOne({
+            id: familyId,
+        })
+
+        if (!family) {
+            this.throwInvalidFamilyMemberIds(['familyId'])
         }
+
+        if (familyMemberIds.length === 0) {
+            this.throwInvalidFamilyMemberIds(['familyMemberIds'])
+        }
+
+        let message = `Family Name:
+${family?.name}
+
+Family Values:
+${family?.values}
+
+Family Members:
+`
 
         for (const memberId of familyMemberIds) {
             const match = await this.familyMembers.findOne({
@@ -212,9 +302,19 @@ class StoryGenerator {
             })
 
             if (!match) {
-                this.throwInvalidFamilyMemberIds()
+                this.throwInvalidFamilyMemberIds(['familyMemberIds'])
             }
+
+            message += `Name: ${match?.name}
+Bio: ${match?.bio}
+
+`
         }
+
+        message += `Here are the story elements the family wants worked into the story for tonight:
+
+${storyElements[0]}`
+
         await this.openai.chat.completions.create({
             model: 'o1-preview',
             messages: [
@@ -223,14 +323,18 @@ class StoryGenerator {
                     content:
                         "You are a master story teller! Once a night, you gather with a family to tell amazing stories about that family. The family has filled out a form that includes their values, their family members, some elements they'd like incorporated into the story, as well as an optional challenge they are currently facing. You take this input and write a 10 minute bedtime story that incorporates all the family pieces to create a once-in-a-lifetime, amazing, creative, bedtime story, to help the family connect with themselves, each other, and to fall asleep. Family form follows:",
                 },
+                {
+                    role: 'system',
+                    content: message,
+                },
             ],
         })
     }
 
-    private throwInvalidFamilyMemberIds() {
+    private throwInvalidFamilyMemberIds(parameters: string[]) {
         throw new SchemaError({
             code: 'INVALID_PARAMETERS',
-            parameters: ['familyMemberIds'],
+            parameters,
         })
     }
 }
@@ -244,6 +348,7 @@ interface GenerateStoryOptions {
     storyElements: string[]
     familyMemberIds: string[]
     currentChallenge?: string
+    familyId: string
 }
 
 class MockOpenAi extends Openai {
@@ -295,14 +400,23 @@ class MockOpenAi extends Openai {
         )
     }
 
-    public assertFirstCompletionMessageEquals(expected: {
-        role: string
-        content: string
-    }) {
+    public assertFirstCompletionMessageEquals(
+        expected: ChatCompletionMessageParam
+    ) {
         assert.isEqualDeep(
             this.createOptions?.messages?.[0],
             expected,
             'Did not pass the expected first message to the completion.'
+        )
+    }
+
+    public assertSecondCompletionMessageEquals(
+        expected: ChatCompletionMessageParam
+    ) {
+        assert.isEqualDeep(
+            this.createOptions?.messages?.[1],
+            expected,
+            'Did not pass the expected second message to the completion.'
         )
     }
 }
