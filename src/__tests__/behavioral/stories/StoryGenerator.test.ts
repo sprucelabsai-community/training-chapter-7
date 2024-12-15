@@ -154,12 +154,52 @@ export default class StoryGeneratorTest extends AbstractEightBitTest {
 
     @test()
     protected static async generatesExpectedSecondMessage() {
-        const members = this.generateFamilyMembersPartOfPrompt()
-
         const storyElements = [generateId()]
-        const elements = storyElements.join(', ')
 
-        const expected = `Family Name:
+        const expected = this.generateSecondMessage(storyElements)
+
+        await this.generateStoryWithAllMembers({ storyElements })
+
+        this.assertSecondMessageEquals(expected)
+    }
+
+    @test()
+    protected static async generatesSecondMessageWithMultipleElements() {
+        const storyElements = [generateId(), generateId()]
+        const expected = this.generateSecondMessage(storyElements)
+        await this.generateStoryWithAllMembers({ storyElements })
+        this.assertSecondMessageEquals(expected)
+    }
+
+    @test()
+    protected static async generatesSecondMessageWithCurrentChallenge() {
+        const storyElements = [generateId()]
+        const currentChallenge = generateId()
+        const expected = this.generateSecondMessage(
+            storyElements,
+            currentChallenge
+        )
+        await this.generateStoryWithAllMembers({
+            storyElements,
+            currentChallenge,
+        })
+        this.assertSecondMessageEquals(expected)
+    }
+
+    private static assertSecondMessageEquals(expected: string) {
+        this.openAi.assertSecondCompletionMessageEquals({
+            role: 'system',
+            content: expected,
+        })
+    }
+
+    private static generateSecondMessage(
+        storyElements: string[],
+        currentChallenge?: string
+    ) {
+        const elements = storyElements.join(', ')
+        const members = this.generateFamilyMembersPartOfPrompt()
+        let expected = `Family Name:
 ${this.family.name}
 
 Family Values:
@@ -172,14 +212,11 @@ Here are the story elements the family wants worked into the story for tonight:
 
 ${elements}`
 
-        await this.generateStoryWithAllMembers({ storyElements })
+        if (currentChallenge) {
+            expected += `\n\nHere is a current challenge they are facing that they would like incorporated into tonight's story:\n${currentChallenge}`
+        }
 
-        this.openAi.assertSecondCompletionMessageEquals({
-            role: 'system',
-            content: expected,
-        })
-
-        this.log(expected)
+        return expected
     }
 
     private static generateFamilyMembersPartOfPrompt() {
@@ -263,10 +300,12 @@ class StoryGenerator {
     }
 
     public async generateStory(options: GenerateStoryOptions) {
-        const { storyElements, familyMemberIds, familyId } = assertOptions(
-            options,
-            ['storyElements', 'familyMemberIds', 'familyId']
-        )
+        const { storyElements, familyMemberIds, familyId, currentChallenge } =
+            assertOptions(options, [
+                'storyElements',
+                'familyMemberIds',
+                'familyId',
+            ])
 
         if (storyElements.length === 0) {
             throw new SchemaError({
@@ -313,7 +352,11 @@ Bio: ${match?.bio}
 
         message += `Here are the story elements the family wants worked into the story for tonight:
 
-${storyElements[0]}`
+${storyElements.join(', ')}`
+
+        if (currentChallenge) {
+            message += `\n\nHere is a current challenge they are facing that they would like incorporated into tonight's story:\n${currentChallenge}`
+        }
 
         await this.openai.chat.completions.create({
             model: 'o1-preview',
