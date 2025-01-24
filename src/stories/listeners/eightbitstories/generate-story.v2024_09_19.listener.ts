@@ -20,6 +20,7 @@ export default async (
         const storyId = await generator.generate({
             ...payload,
             familyId: family!.id,
+            personId: personId!,
         })
 
         await client.emitAndFlattenResponses(

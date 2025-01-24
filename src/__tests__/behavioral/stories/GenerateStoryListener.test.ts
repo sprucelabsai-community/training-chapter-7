@@ -48,8 +48,11 @@ export default class GenerateStoryListenerTest extends AbstractEightBitTest {
     }
 
     @test()
-    protected static async passesPayloadToGenerate() {
-        const payload: Omit<StoryGeneratorGenerateOptions, 'familyId'> = {
+    protected static async passesExpectedOptionsToGenerate() {
+        const payload: Omit<
+            StoryGeneratorGenerateOptions,
+            'familyId' | 'personId'
+        > = {
             currentChallenge: generateId(),
             familyMembers: [generateId()],
             storyElements: [generateId()],
@@ -60,6 +63,7 @@ export default class GenerateStoryListenerTest extends AbstractEightBitTest {
         this.mockGenerator.assertOptionsPassedToGenerateEqual({
             ...payload,
             familyId: this.familyId,
+            personId: this.fakedPerson.id,
         })
     }
 

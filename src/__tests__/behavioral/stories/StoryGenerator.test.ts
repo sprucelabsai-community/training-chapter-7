@@ -62,9 +62,14 @@ export default class StoryGeneratorTest extends AbstractEightBitTest {
     @test()
     protected static async generateMethodThowsWithMissing() {
         //@ts-ignore
-        const err = await assert.doesThrowAsync(() => this.generateStory())
+        const err = await assert.doesThrowAsync(() => this.generator.generate())
         errorAssert.assertError(err, 'MISSING_PARAMETERS', {
-            parameters: ['storyElements', 'familyMembers', 'familyId'],
+            parameters: [
+                'storyElements',
+                'familyMembers',
+                'familyId',
+                'personId',
+            ],
         })
     }
 
@@ -189,9 +194,18 @@ export default class StoryGeneratorTest extends AbstractEightBitTest {
     }
 
     @test()
-    protected static async storyGeneratorReturnsResponseFromChatGpt() {
-        const actual = await this.generateStoryWithAllMembers()
-        assert.isEqual(actual, this.chatGptResponseMessage)
+    protected static async storyGeneratorCreatesStoryRecordWithResponseFromChatGpt() {
+        const storyId = await this.generateStoryWithAllMembers()
+
+        const story = await this.stories.findOne({
+            id: storyId,
+        })
+
+        assert.isTruthy(story, 'Story generator did not create story record.')
+        assert.isEqual(story.body, this.chatGptResponseMessage)
+        assert.isEqualDeep(story.source, {
+            personId: this.fakedPerson.id,
+        })
     }
 
     private static set chatGptResponseMessage(message: string) {
@@ -254,7 +268,6 @@ Bio: ${m.bio}`
         return await this.generateStory({
             familyMembers: this.members.map((m) => m.id),
             storyElements: [generateId()],
-            familyId: this.family.id,
             ...options,
         })
     }
@@ -271,7 +284,6 @@ Bio: ${m.bio}`
             this.generateStory({
                 storyElements: [],
                 familyMembers: [],
-                familyId: this.family.id,
                 ...options,
             })
         )
@@ -280,8 +292,14 @@ Bio: ${m.bio}`
         })
     }
 
-    private static generateStory(options: StoryGeneratorGenerateOptions) {
-        return this.generator.generate(options)
+    private static generateStory(
+        options: Omit<StoryGeneratorGenerateOptions, 'personId' | 'familyId'>
+    ) {
+        return this.generator.generate({
+            personId: this.fakedPerson.id,
+            familyId: this.family.id,
+            ...options,
+        })
     }
 }
 
