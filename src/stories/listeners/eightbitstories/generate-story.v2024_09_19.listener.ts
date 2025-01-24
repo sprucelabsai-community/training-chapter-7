@@ -4,12 +4,11 @@ import {
     SpruceEventResponse,
 } from '@sprucelabs/spruce-event-utils'
 import { SpruceSchemas } from '#spruce/schemas/schemas.types'
-import StoryGeneratorImpl from '../../../StoryGenerator'
 
 export default async (
     event: SpruceEvent<SkillEventContract, EmitPayload>
 ): SpruceEventResponse => {
-    const { payload, client, source, log, stores } = event
+    const { payload, client, source, log, stores, generator } = event
     const { personId } = source
 
     try {
@@ -18,10 +17,6 @@ export default async (
             'source.personId': personId,
         })
 
-        const generator = await StoryGeneratorImpl.Generator({
-            openaiApiKey: 'aoeu',
-            stores,
-        })
         const storyId = await generator.generate({
             ...payload,
             familyId: family!.id,

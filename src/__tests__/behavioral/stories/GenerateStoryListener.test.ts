@@ -18,12 +18,16 @@ export default class GenerateStoryListenerTest extends AbstractEightBitTest {
     @seed('families', 1)
     protected static async beforeEach() {
         await super.beforeEach()
-        await this.bootSkill()
 
         const family = await this.getFirstFamily()
         this.familyId = family.id
+
         StoryGeneratorImpl.Class = MockStoryGenerator
+        delete MockStoryGenerator.errorMessage
+
         await this.eventFaker.fakeDidGenerateStory()
+
+        await this.bootSkill()
     }
 
     @test()
@@ -82,7 +86,7 @@ export default class GenerateStoryListenerTest extends AbstractEightBitTest {
 
     @test()
     protected static async emitsDidFailToGenerateOnFail() {
-        StoryGeneratorImpl.Class = ThrowingStoryGenerator
+        MockStoryGenerator.errorMessage = generateId()
 
         let passedTarget: DidFailTargetAndPayload['target'] | undefined
         let passedPayload: DidFailTargetAndPayload['payload'] | undefined
@@ -98,7 +102,7 @@ export default class GenerateStoryListenerTest extends AbstractEightBitTest {
 
         assert.isEqualDeep(passedTarget, { personId: this.fakedPerson.id })
         assert.isEqualDeep(passedPayload, {
-            errorMessage: ThrowingStoryGenerator.errorMessage,
+            errorMessage: MockStoryGenerator.errorMessage,
         })
     }
 
@@ -147,12 +151,16 @@ class MockStoryGenerator implements StoryGenerator {
     public static instance: MockStoryGenerator
     private generateOptions?: StoryGeneratorGenerateOptions
     private storyId = generateId()
+    public static errorMessage?: string
 
     public constructor() {
         MockStoryGenerator.instance = this
     }
 
     public async generate(options: StoryGeneratorGenerateOptions) {
+        if (MockStoryGenerator.errorMessage) {
+            throw new Error(MockStoryGenerator.errorMessage)
+        }
         this.generateOptions = options
         return this.storyId
     }
@@ -184,12 +192,5 @@ class MockStoryGenerator implements StoryGenerator {
             familyId,
             'The familyId passed to generate does not match.'
         )
-    }
-}
-
-class ThrowingStoryGenerator implements StoryGenerator {
-    public static errorMessage = generateId()
-    public async generate(): Promise<string> {
-        throw new Error(ThrowingStoryGenerator.errorMessage)
     }
 }

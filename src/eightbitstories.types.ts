@@ -1,4 +1,5 @@
 import { SpruceSchemas } from '@sprucelabs/mercury-types'
+import { StoryGenerator } from './StoryGenerator'
 
 export type FamilySchema =
     SpruceSchemas.Eightbitstories.v2024_09_19.FamilySchema
@@ -17,3 +18,9 @@ export type UpdateFamilyMember =
     SpruceSchemas.Eightbitstories.v2024_09_19.UpdateFamilyMember
 export type GenerateStoryPayload =
     SpruceSchemas.Eightbitstories.v2024_09_19.GenerateStoryEmitPayload
+
+declare module '@sprucelabs/spruce-skill-utils/build/types/skill.types' {
+    interface SkillContext {
+        generator: StoryGenerator
+    }
+}
