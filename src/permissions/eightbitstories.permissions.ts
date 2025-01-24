@@ -35,6 +35,15 @@ const eightbitstoriesPermissions = buildPermissionContract({
                 },
             },
         },
+        {
+            id: 'can-read-story',
+            name: 'Can read bedtime story',
+            defaults: {
+                anonymous: {
+                    default: true,
+                },
+            },
+        },
     ],
 })
 

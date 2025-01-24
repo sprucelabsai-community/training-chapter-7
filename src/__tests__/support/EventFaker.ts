@@ -4,9 +4,29 @@ import {
     SpruceSchemas,
 } from '@sprucelabs/spruce-test-fixtures'
 import { generateId } from '@sprucelabs/test-utils'
-import { Family, PublicFamilyMember } from '../../eightbitstories.types'
+import {
+    Family,
+    GetStory,
+    PublicFamilyMember,
+} from '../../eightbitstories.types'
 
 export default class EventFaker {
+    public async fakeGetStory(
+        cb?: (targetAndPayload: GetStoryTargetAndPayload) => void | GetStory
+    ) {
+        await eventFaker.on(
+            'eightbitstories.get-story::v2024_09_19',
+            (targetAndPayload) => {
+                return {
+                    story: cb?.(targetAndPayload) ?? {
+                        id: generateId(),
+                        body: generateId(),
+                    },
+                }
+            }
+        )
+    }
+
     public async fakeDidFailToGenerateStory(
         cb?: (targetAndPayload: DidFailTargetAndPayload) => void
     ) {
@@ -221,3 +241,6 @@ export type DidGenerateTargetAndPayload =
 
 export type DidFailTargetAndPayload =
     SpruceSchemas.Eightbitstories.v2024_09_19.DidFailToGenerateStoryEmitTargetAndPayload
+
+export type GetStoryTargetAndPayload =
+    SpruceSchemas.Eightbitstories.v2024_09_19.GetStoryEmitTargetAndPayload

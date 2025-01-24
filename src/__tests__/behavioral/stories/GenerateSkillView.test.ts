@@ -283,6 +283,10 @@ export default class GenerateSkillViewTest extends AbstractEightBitTest {
             errorMessage,
             "You didn't pass the error from the event to your alert!"
         )
+
+        await alertVc.hide()
+
+        vcAssert.assertCardIsNotBusy(this.controlsCardVc)
     }
 
     @test()

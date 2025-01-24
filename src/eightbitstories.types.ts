@@ -18,6 +18,7 @@ export type UpdateFamilyMember =
     SpruceSchemas.Eightbitstories.v2024_09_19.UpdateFamilyMember
 export type GenerateStoryPayload =
     SpruceSchemas.Eightbitstories.v2024_09_19.GenerateStoryEmitPayload
+export type GetStory = SpruceSchemas.Eightbitstories.v2024_09_19.GetStoryStory
 
 declare module '@sprucelabs/spruce-skill-utils/build/types/skill.types' {
     interface SkillContext {

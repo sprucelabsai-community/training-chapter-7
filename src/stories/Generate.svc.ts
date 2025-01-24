@@ -162,6 +162,7 @@ export default class GenerateSkillViewController extends AbstractSkillViewContro
     }: SpruceSchemas.Eightbitstories.v2024_09_19.DidFailToGenerateStoryEmitTargetAndPayload) {
         const { errorMessage } = payload
         await this.alert({ message: errorMessage })
+        this.controlsCardVc.setIsBusy(false)
     }
 
     public async willBlur() {
