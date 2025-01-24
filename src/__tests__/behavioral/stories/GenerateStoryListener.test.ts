@@ -1,5 +1,6 @@
-import { fake } from '@sprucelabs/spruce-test-fixtures'
+import { fake, seed } from '@sprucelabs/spruce-test-fixtures'
 import { test, generateId, assert } from '@sprucelabs/test-utils'
+import { GenerateStoryPayload } from '../../../eightbitstories.types'
 import StoryGeneratorImpl, {
     StoryGenerator,
     StoryGeneratorGenerateOptions,
@@ -12,10 +13,15 @@ import {
 
 @fake.login()
 export default class GenerateStoryListenerTest extends AbstractEightBitTest {
+    private static familyId: string
+
+    @seed('families', 1)
     protected static async beforeEach() {
         await super.beforeEach()
         await this.bootSkill()
 
+        const family = await this.getFirstFamily()
+        this.familyId = family.id
         StoryGeneratorImpl.Class = MockStoryGenerator
         await this.eventFaker.fakeDidGenerateStory()
     }
@@ -39,7 +45,7 @@ export default class GenerateStoryListenerTest extends AbstractEightBitTest {
 
     @test()
     protected static async passesPayloadToGenerate() {
-        const payload: StoryGeneratorGenerateOptions = {
+        const payload: Omit<StoryGeneratorGenerateOptions, 'familyId'> = {
             currentChallenge: generateId(),
             familyMembers: [generateId()],
             storyElements: [generateId()],
@@ -47,7 +53,10 @@ export default class GenerateStoryListenerTest extends AbstractEightBitTest {
 
         await this.emitGenerateStory(payload)
 
-        this.mockGenerator.assertOptionsPassedToGenerate(payload)
+        this.mockGenerator.assertOptionsPassedToGenerateEqual({
+            ...payload,
+            familyId: this.familyId,
+        })
     }
 
     @test()
@@ -93,13 +102,35 @@ export default class GenerateStoryListenerTest extends AbstractEightBitTest {
         })
     }
 
+    @test()
+    protected static async usesProperFamily() {
+        await this.families.delete({})
+
+        await this.families.createOne({
+            name: generateId(),
+            values: generateId(),
+            source: {
+                personId: generateId(),
+            },
+        })
+
+        const secondFamily = await this.families.createOne({
+            name: generateId(),
+            values: generateId(),
+            source: {
+                personId: this.fakedPerson.id,
+            },
+        })
+
+        await this.emitGenerateStory()
+        this.mockGenerator.assertFamilyIdPassedToGenerate(secondFamily.id)
+    }
+
     private static get mockGenerator(): MockStoryGenerator {
         return MockStoryGenerator.instance
     }
 
-    private static async emitGenerateStory(
-        payload?: StoryGeneratorGenerateOptions
-    ) {
+    private static async emitGenerateStory(payload?: GenerateStoryPayload) {
         await this.fakedClient.emitAndFlattenResponses(
             'eightbitstories.generate-story::v2024_09_19',
             {
@@ -137,13 +168,21 @@ class MockStoryGenerator implements StoryGenerator {
         )
     }
 
-    public assertOptionsPassedToGenerate(
+    public assertOptionsPassedToGenerateEqual(
         expected: StoryGeneratorGenerateOptions
     ) {
         assert.isEqualDeep(
             this.generateOptions,
             expected,
             'You did not pass the expected options to generate()!'
+        )
+    }
+
+    public assertFamilyIdPassedToGenerate(familyId: string) {
+        assert.isEqual(
+            this.generateOptions?.familyId,
+            familyId,
+            'The familyId passed to generate does not match.'
         )
     }
 }

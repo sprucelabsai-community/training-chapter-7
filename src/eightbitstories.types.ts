@@ -15,3 +15,5 @@ export type CreateFamilyMember =
     SpruceSchemas.Eightbitstories.v2024_09_19.CreateFamilyMember
 export type UpdateFamilyMember =
     SpruceSchemas.Eightbitstories.v2024_09_19.UpdateFamilyMember
+export type GenerateStoryPayload =
+    SpruceSchemas.Eightbitstories.v2024_09_19.GenerateStoryEmitPayload
