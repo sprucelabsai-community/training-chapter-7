@@ -6,19 +6,17 @@ import FamiliesStore from './family/Families.store'
 import FamilyMembersStore from './members/FamilyMembers.store'
 
 export default class StoryGeneratorImpl implements StoryGenerator {
-    public static Class?: new () => StoryGenerator
+    public static Class?: new (
+        options: StoryGeneratorConstructorOptions
+    ) => StoryGenerator
     public static Openai = Openai
 
     private familyMembers: FamilyMembersStore
     private openai: Openai
     private families: FamiliesStore
 
-    private constructor(options: {
-        familyMembers: FamilyMembersStore
-        openaiApiKey: string
-        families: FamiliesStore
-    }) {
-        const { familyMembers, openaiApiKey, families } = options
+    private constructor(options: StoryGeneratorConstructorOptions) {
+        const { familyMembers, openAiApiKey: openaiApiKey, families } = options
         this.familyMembers = familyMembers
         this.families = families
         this.openai = new StoryGeneratorImpl.Openai({
@@ -36,7 +34,7 @@ export default class StoryGeneratorImpl implements StoryGenerator {
 
         return new (this.Class ?? this)({
             familyMembers,
-            openaiApiKey,
+            openAiApiKey: openaiApiKey,
             families,
         })
     }
@@ -137,4 +135,10 @@ export interface StoryGenerator {
 
 export type StoryGeneratorGenerateOptions = GenerateStoryPayload & {
     familyId: string
+}
+
+export interface StoryGeneratorConstructorOptions {
+    familyMembers: FamilyMembersStore
+    openAiApiKey: string
+    families: FamiliesStore
 }
