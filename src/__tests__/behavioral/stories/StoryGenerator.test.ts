@@ -44,6 +44,8 @@ export default class StoryGeneratorTest extends AbstractEightBitTest {
 
         this.family = await this.getFirstFamily()
         this.members = await this.familyMembers.find({})
+
+        this.chatGptResponseMessage = generateId()
     }
 
     @test()
@@ -186,6 +188,20 @@ export default class StoryGeneratorTest extends AbstractEightBitTest {
         this.assertSecondMessageEquals(expected)
     }
 
+    @test()
+    protected static async storyGeneratorReturnsResponseFromChatGpt() {
+        const actual = await this.generateStoryWithAllMembers()
+        assert.isEqual(actual, this.chatGptResponseMessage)
+    }
+
+    private static set chatGptResponseMessage(message: string) {
+        MockOpenAi.completionMessage = message
+    }
+
+    private static get chatGptResponseMessage() {
+        return MockOpenAi.completionMessage
+    }
+
     private static assertSecondMessageEquals(expected: string) {
         this.openAi.assertSecondCompletionMessageEquals({
             role: 'system',
@@ -235,7 +251,7 @@ Bio: ${m.bio}`
     private static async generateStoryWithAllMembers(
         options?: Partial<GenerateStoryOptions>
     ) {
-        await this.generateStory({
+        return await this.generateStory({
             familyMemberIds: this.members.map((m) => m.id),
             storyElements: [generateId()],
             familyId: this.family.id,
@@ -358,7 +374,7 @@ ${storyElements.join(', ')}`
             message += `\n\nHere is a current challenge they are facing that they would like incorporated into tonight's story:\n${currentChallenge}`
         }
 
-        await this.openai.chat.completions.create({
+        const response = await this.openai.chat.completions.create({
             model: 'o1-preview',
             messages: [
                 {
@@ -372,6 +388,8 @@ ${storyElements.join(', ')}`
                 },
             ],
         })
+
+        return response.choices[0].message.content
     }
 
     private throwInvalidFamilyMemberIds(parameters: string[]) {
@@ -396,6 +414,7 @@ interface GenerateStoryOptions {
 
 class MockOpenAi extends Openai {
     public static instance: MockOpenAi
+    public static completionMessage: string
 
     private constructorOptions: ClientOptions
     private didCreateCompletion = false
@@ -406,11 +425,33 @@ class MockOpenAi extends Openai {
         MockOpenAi.instance = this
         this.constructorOptions = options
 
+        //@ts-ignore
         this.chat.completions.create = async (options) => {
             this.createOptions = options
             this.didCreateCompletion = true
-            return {} as ChatCompletion
+            return {
+                id: generateId(),
+                created: Date.now(),
+                model: '4o',
+                object: 'chat.completion',
+                choices: [
+                    {
+                        finish_reason: 'stop' as const,
+                        index: 0,
+                        logprobs: null,
+                        message: {
+                            content: this.messageContent,
+                            role: 'assistant',
+                            refusal: null,
+                        },
+                    },
+                ],
+            } as ChatCompletion
         }
+    }
+
+    private get messageContent() {
+        return MockOpenAi.completionMessage
     }
 
     public assertApiKeyEquals(expected: string) {
